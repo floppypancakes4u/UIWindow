@@ -84,6 +84,7 @@ function Toolbar() {
 | `closeWindow(id, { force })` | Close a window (honors `closable` / `onClose` unless `force`). |
 | `closeAll({ force })` | Close every window. |
 | `focusWindow(id)` | Raise + focus a window. |
+| `restoreWindow(id)` | Restore a minimized window, then focus it. No-op if it is not minimized. |
 | `getWindow(id)` | Read the managed window record. |
 | `updateWindow(id, patch)` | Patch `title`, `children`, `theme`, or `headerActions`. |
 

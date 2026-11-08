@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAppWindowManagerInternal } from "@/components/ui/app-window/app-window-internal-context";
 import { cn } from "@/lib/cn";
@@ -55,10 +55,15 @@ export function AppWindowFrame({ win }: { win: ManagedAppWindow }) {
   const createdRef = useRef(false);
   const didModalAutofocusRef = useRef(false);
   const isDragging = useRef(false);
+  /** Suppresses React left/top so parent re-renders cannot clobber DOM drag position. */
+  const [dragGesture, setDragGesture] = useState(false);
   const dragSnapRef = useRef<SnapTarget | null>(null);
   /** Fixed size during a drag started from maximized (DOM may lag one frame). */
   const dragBoundsRef = useRef<{ width: number; height: number } | null>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const dragHostRectRef = useRef<{ left: number; top: number } | null>(null);
+  const dragPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastSnapTypeRef = useRef<SnapTarget["type"] | null>(null);
   const isResizing = useRef(false);
   const resizeDir = useRef<string | null>(null);
   const resizeStart = useRef({
@@ -148,16 +153,22 @@ export function AppWindowFrame({ win }: { win: ManagedAppWindow }) {
       if (!win.options.draggable || win.isMinimized) return;
       const host = hostRef.current;
       if (!host) return;
-      const elRect = sectionRef.current?.getBoundingClientRect();
-      if (!elRect) return;
+      const el = sectionRef.current;
+      const elRect = el?.getBoundingClientRect();
+      if (!el || !elRect) return;
 
       isDragging.current = true;
+      setDragGesture(true);
       win.options.onMoveStart?.(api);
+      const hostRect = host.getBoundingClientRect();
+      dragHostRectRef.current = { left: hostRect.left, top: hostRect.top };
       dragOffset.current = {
         x: e.clientX - elRect.left,
         y: e.clientY - elRect.top,
       };
       dragBoundsRef.current = null;
+      dragPosRef.current = null;
+      lastSnapTypeRef.current = null;
 
       if (win.isMaximized) {
         const prev = win.previousBounds ?? {
@@ -168,9 +179,8 @@ export function AppWindowFrame({ win }: { win: ManagedAppWindow }) {
         };
         const ew = Math.max(win.minWidth, prev.width);
         const eh = Math.max(win.minHeight, prev.height);
-        const r = host.getBoundingClientRect();
-        let x = e.clientX - r.left - dragOffset.current.x;
-        let y = e.clientY - r.top - dragOffset.current.y;
+        let x = e.clientX - hostRect.left - dragOffset.current.x;
+        let y = e.clientY - hostRect.top - dragOffset.current.y;
         if (win.options.constrainToViewport) {
           const maxX = Math.max(0, containerWidth - ew);
           const maxY = Math.max(0, containerHeight - eh);
@@ -186,32 +196,33 @@ export function AppWindowFrame({ win }: { win: ManagedAppWindow }) {
           width: ew,
           height: eh,
         });
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.style.width = `${ew}px`;
+        el.style.height = `${eh}px`;
         dragBoundsRef.current = { width: ew, height: eh };
+        dragPosRef.current = { x, y };
         win.options.onMaximize?.(api, false);
       }
 
       const onMove = (ev: MouseEvent) => {
-        if (!isDragging.current || !sectionRef.current || !hostRef.current) return;
-        const r = hostRef.current.getBoundingClientRect();
+        if (!isDragging.current || !sectionRef.current || !dragHostRectRef.current) return;
+        const r = dragHostRectRef.current;
+        const node = sectionRef.current;
         let x = ev.clientX - r.left - dragOffset.current.x;
         let y = ev.clientY - r.top - dragOffset.current.y;
-        const el = sectionRef.current;
-        const ew = dragBoundsRef.current?.width ?? el.offsetWidth;
-        const eh = dragBoundsRef.current?.height ?? el.offsetHeight;
+        const ew = dragBoundsRef.current?.width ?? node.offsetWidth;
+        const eh = dragBoundsRef.current?.height ?? node.offsetHeight;
         if (win.options.constrainToViewport) {
           const maxX = Math.max(0, containerWidth - ew);
           const maxY = Math.max(0, containerHeight - eh);
           x = Math.max(0, Math.min(x, maxX));
           y = Math.max(0, Math.min(y, maxY));
         }
-        dispatch({
-          type: "setBounds",
-          id: win.id,
-          x,
-          y,
-          width: ew,
-          height: eh,
-        });
+        // Move via DOM during the gesture; commit React state once on mouseup.
+        node.style.left = `${x}px`;
+        node.style.top = `${y}px`;
+        dragPosRef.current = { x, y };
         const snap = getSnapTarget(
           x,
           y,
@@ -222,29 +233,51 @@ export function AppWindowFrame({ win }: { win: ManagedAppWindow }) {
           win.options.snapThreshold ?? 22
         );
         dragSnapRef.current = snap;
-        setSnapPreview(snap);
+        const snapType = snap?.type ?? null;
+        if (snapType !== lastSnapTypeRef.current) {
+          lastSnapTypeRef.current = snapType;
+          setSnapPreview(snap);
+        }
         win.options.onMove?.(api, { x, y, snapTarget: snap });
       };
 
-       const onUp = () => {
-         const was = isDragging.current;
-         isDragging.current = false;
-         dragBoundsRef.current = null;
-         document.removeEventListener("mousemove", onMove);
-         document.removeEventListener("mouseup", onUp);
-         if (was) {
-           const target = dragSnapRef.current;
-           dragSnapRef.current = null;
-           setSnapPreview(null);
-           if (target) {
-             dispatch({ type: "applySnap", id: win.id, target });
-           }
-           requestAnimationFrame(() => {
-             persistWindowById(win.id);
-             win.options.onMoveEnd?.(api);
-           });
-         }
-       };
+      const onUp = () => {
+        const was = isDragging.current;
+        isDragging.current = false;
+        const ew = dragBoundsRef.current?.width ?? sectionRef.current?.offsetWidth ?? win.width;
+        const eh = dragBoundsRef.current?.height ?? sectionRef.current?.offsetHeight ?? win.height;
+        const pos = dragPosRef.current;
+        dragBoundsRef.current = null;
+        dragHostRectRef.current = null;
+        dragPosRef.current = null;
+        lastSnapTypeRef.current = null;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        if (was) {
+          const target = dragSnapRef.current;
+          dragSnapRef.current = null;
+          setSnapPreview(null);
+          if (target) {
+            dispatch({ type: "applySnap", id: win.id, target });
+          } else if (pos) {
+            dispatch({
+              type: "setBounds",
+              id: win.id,
+              x: pos.x,
+              y: pos.y,
+              width: ew,
+              height: eh,
+            });
+          }
+          setDragGesture(false);
+          requestAnimationFrame(() => {
+            persistWindowById(win.id);
+            win.options.onMoveEnd?.(api);
+          });
+        } else {
+          setDragGesture(false);
+        }
+      };
 
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
@@ -400,8 +433,9 @@ export function AppWindowFrame({ win }: { win: ManagedAppWindow }) {
 
   const shellStyle: CSSProperties = {
     position: "absolute",
-    left: win.x,
-    top: win.y,
+    // During drag, prefer the live gesture position so React cannot snap back to win.x/y.
+    left: dragGesture ? (dragPosRef.current?.x ?? win.x) : win.x,
+    top: dragGesture ? (dragPosRef.current?.y ?? win.y) : win.y,
     width: win.width,
     height: win.height,
     zIndex: win.zIndex,

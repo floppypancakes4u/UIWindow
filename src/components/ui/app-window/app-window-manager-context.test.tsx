@@ -1,6 +1,6 @@
 "use client";
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -467,6 +467,67 @@ describe("AppWindowManagerProvider", () => {
     await waitFor(() =>
       expect(restore).not.toHaveAttribute("data-minimized-tray-highlight")
     );
+  });
+
+  it("restoreWindow on the public API restores a minimized window and focuses it", async () => {
+    const wmRef: { current: AppWindowManagerPublicApi | null } = { current: null };
+    const onRestore = vi.fn();
+
+    function RestoreOpener() {
+      const wm = useAppWindowManager();
+      wmRef.current = wm;
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            wm.openWindow({
+              title: "RestoreMe",
+              id: "w-restore",
+              rememberState: false,
+              width: 200,
+              height: 120,
+              x: 10,
+              y: 10,
+              onRestore,
+              children: <span>in</span>,
+            })
+          }
+        >
+          open-restore
+        </button>
+      );
+    }
+
+    render(
+      <Host>
+        <RestoreOpener />
+      </Host>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "open-restore" }));
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: "RestoreMe" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Minimize RestoreMe" }));
+    await screen.findByRole("button", { name: "Restore RestoreMe" });
+    expect(screen.queryByRole("region", { name: "RestoreMe" })).not.toBeInTheDocument();
+    expect(wmRef.current?.getWindow("w-restore")?.isMinimized).toBe(true);
+
+    await act(async () => {
+      wmRef.current?.restoreWindow("w-restore");
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: "RestoreMe" })).toBeInTheDocument();
+    });
+    expect(wmRef.current?.getWindow("w-restore")?.isMinimized).toBe(false);
+    await waitFor(() => {
+      expect(onRestore).toHaveBeenCalledTimes(1);
+    });
+    expect(wmRef.current?.getWindow("missing")).toBeNull();
+    wmRef.current?.restoreWindow("missing");
+    wmRef.current?.restoreWindow("w-restore");
+    expect(wmRef.current?.getWindow("w-restore")?.isMinimized).toBe(false);
   });
 
   it("persists updated bounds after dragging a window with persistKey", async () => {

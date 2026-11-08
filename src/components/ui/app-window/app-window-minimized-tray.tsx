@@ -38,7 +38,6 @@ function MinimizedTrayChip({
       return;
     }
 
-    setHighlight(true);
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
     const schedule = (fn: () => void, delay: number) => {
@@ -49,6 +48,10 @@ function MinimizedTrayChip({
       );
     };
 
+    // Schedule the first flash instead of setting it during the effect.
+    // StrictMode runs the effect, cleans it up, then runs it again; a
+    // synchronous setState is cancelled by that cleanup and the flash never shows.
+    schedule(() => setHighlight(true), 0);
     schedule(() => setHighlight(false), FLASH_ON_MS);
     schedule(() => setHighlight(true), FLASH_ON_MS + FLASH_GAP_MS);
     schedule(() => setHighlight(false), 2 * FLASH_ON_MS + FLASH_GAP_MS);

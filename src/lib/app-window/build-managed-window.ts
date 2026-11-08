@@ -22,7 +22,9 @@ export function buildManagedAppWindow(
   const containerMeasured = optionsArg?.containerMeasured ?? true;
   const id =
     req.id ?? `window_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-  const { title, children, theme: themePatch, id: _omitId, ...rest } = req;
+  const { title, children, theme: themePatch, ...restWithId } = req;
+  const rest = { ...restWithId };
+  delete rest.id;
   const options: ResolvedAppWindowOptions = {
     ...APP_WINDOW_DEFAULT_OPTIONS,
     ...rest,

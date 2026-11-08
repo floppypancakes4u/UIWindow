@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppWindowMinimizedTray,
@@ -8,7 +8,12 @@ import {
 } from "@/components/ui/app-window/app-window-minimized-tray";
 
 describe("AppWindowMinimizedTray", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("flashes the matching chip bright yellow twice when flashSignal updates", async () => {
+    vi.useFakeTimers();
     const onRestore = vi.fn();
     const flash: MinimizedTrayFlashSignal = { windowId: "w-a", seq: 1 };
 
@@ -39,22 +44,26 @@ describe("AppWindowMinimizedTray", () => {
     const alpha = screen.getByRole("button", { name: "Restore Alpha" });
     const beta = screen.getByRole("button", { name: "Restore Beta" });
 
-    await waitFor(() =>
-      expect(alpha).toHaveAttribute("data-minimized-tray-highlight", "true")
-    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(alpha).toHaveAttribute("data-minimized-tray-highlight", "true");
     expect(beta).not.toHaveAttribute("data-minimized-tray-highlight");
 
-    await waitFor(() =>
-      expect(alpha).not.toHaveAttribute("data-minimized-tray-highlight")
-    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(alpha).not.toHaveAttribute("data-minimized-tray-highlight");
 
-    await waitFor(() =>
-      expect(alpha).toHaveAttribute("data-minimized-tray-highlight", "true")
-    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(175);
+    });
+    expect(alpha).toHaveAttribute("data-minimized-tray-highlight", "true");
 
-    await waitFor(() =>
-      expect(alpha).not.toHaveAttribute("data-minimized-tray-highlight")
-    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(alpha).not.toHaveAttribute("data-minimized-tray-highlight");
   });
 
   it("runs flash again when seq increments for the same window", async () => {

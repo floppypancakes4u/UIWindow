@@ -49,6 +49,7 @@ describe("buildManagedAppWindow", () => {
     );
 
     expect(w.isMaximized).toBe(false);
+    expect(w.options).not.toHaveProperty("id");
     expect(w.width).toBe(400);
     expect(w.height).toBe(520);
     expect(w.x).toBe(12);

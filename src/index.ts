@@ -44,3 +44,35 @@ export {
   type AppWindowManagerAction,
 } from "@/lib/app-window/app-window-reducer";
 export { buildManagedAppWindow } from "@/lib/app-window/build-managed-window";
+
+export { DockProvider, useDockWorkspace, useDockDrag } from "@/components/ui/dock/dock-provider";
+export type { DockDrag, DockDragApi, DockHit, DockWorkspaceApi } from "@/components/ui/dock/dock-provider";
+export { DockWorkspace } from "@/components/ui/dock/dock-workspace";
+export type { DockView } from "@/components/ui/dock/dock-workspace";
+export { DOCK_DEFAULT_THEME } from "@/lib/dock/theme";
+export type { DockTheme } from "@/lib/dock/theme";
+export type {
+  DockEdge,
+  DockGroupNode,
+  DockLayout,
+  DockNode,
+  DockPlacement,
+  DockSplitNode,
+  DockSplitPreset,
+  DockTabLocation,
+} from "@/lib/dock/types";
+export {
+  closeTab,
+  dockTab,
+  ensureTab,
+  flattenDock,
+  locateTab,
+  moveTab,
+  openTab,
+  openPreviewTab,
+  popOutTab,
+  floatTab,
+  sanitizeDockLayout,
+  splitGroupPreset,
+  toggleTab,
+} from "@/lib/dock/layout";

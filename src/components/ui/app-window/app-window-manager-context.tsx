@@ -46,6 +46,7 @@ export interface AppWindowManagerPublicApi {
   closeWindow: (id: string, opts?: { force?: boolean }) => boolean;
   closeAll: (opts?: { force?: boolean }) => void;
   focusWindow: (id: string) => void;
+  restoreWindow: (id: string) => void;
   getWindow: (id: string) => ManagedAppWindow | null;
   updateWindow: (
     id: string,
@@ -308,10 +309,11 @@ export function AppWindowManagerProvider({
       closeWindow,
       closeAll,
       focusWindow,
+      restoreWindow,
       getWindow,
       updateWindow,
     }),
-    [openWindow, closeWindow, closeAll, focusWindow, getWindow, updateWindow]
+    [openWindow, closeWindow, closeAll, focusWindow, restoreWindow, getWindow, updateWindow]
   );
 
   const setSnapPreview = useCallback((target: SnapTarget | null) => {

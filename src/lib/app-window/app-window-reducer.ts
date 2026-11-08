@@ -81,7 +81,8 @@ export function appWindowManagerReducer(
       };
     }
     case "close": {
-      const { [action.id]: _removed, ...rest } = state.windows;
+      const rest = { ...state.windows };
+      delete rest[action.id];
       const ids = state.ids.filter((i) => i !== action.id);
       let activeId = state.activeId;
       if (activeId === action.id) {
